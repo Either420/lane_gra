@@ -1,0 +1,29 @@
+# 数据集
+CULane/
+
+# 视频文件
+*.avi
+*.mp4
+
+# 模型权重
+*.pth
+best_model/
+
+# 训练日志和结果
+result/
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# C++/CUDA 编译产物
+my_interp/build/
+my_interp/dist/
+my_interp/*.egg-info/
+
+# Claude 配置
+.claude/
+
+# 临时文件
+.work_dir_tmp_file.txt
