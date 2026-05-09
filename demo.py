@@ -69,7 +69,7 @@ if __name__ == "__main__":
     elif cfg.dataset == 'Tusimple':
         cls_num_per_lane = 56
     else:
-        raise NotImplementedError
+        cls_num_per_lane = cfg.num_row
 
     net = get_model(cfg)
 
@@ -98,7 +98,24 @@ if __name__ == "__main__":
         datasets = [LaneTestDataset(cfg.data_root,os.path.join(cfg.data_root, split),img_transform = img_transforms, crop_size = cfg.train_height) for split in splits]
         img_w, img_h = 1280, 720
     else:
-        raise NotImplementedError
+        import glob
+        txt_path = os.path.join(cfg.data_root, 'test.txt')
+        if not os.path.exists(txt_path):
+            img_files = sorted(
+                glob.glob(os.path.join(cfg.data_root, '*.jpg')) +
+                glob.glob(os.path.join(cfg.data_root, '*.jpeg')) +
+                glob.glob(os.path.join(cfg.data_root, '*.png'))
+            )
+            assert len(img_files) > 0, 'No images found in ' + cfg.data_root
+            with open(txt_path, 'w') as f:
+                f.write('\n'.join(os.path.basename(p) for p in img_files))
+            print('Auto-generated test.txt with %d images' % len(img_files))
+        splits = ['test.txt']
+        datasets = [LaneTestDataset(cfg.data_root, txt_path, img_transform=img_transforms, crop_size=cfg.train_height)]
+        with open(txt_path) as f:
+            first = f.readline().strip().split()[0]
+        sample = cv2.imread(os.path.join(cfg.data_root, first))
+        img_h, img_w = sample.shape[:2]
     for split, dataset in zip(splits, datasets):
         loader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle = False, num_workers=1)
         fourcc = cv2.VideoWriter_fourcc(*'MJPG')

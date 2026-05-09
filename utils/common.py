@@ -94,7 +94,10 @@ def merge_config():
     elif cfg.dataset == 'CurveLanes':
         cfg.row_anchor = np.linspace(0.4, 1, cfg.num_row)
         cfg.col_anchor = np.linspace(0, 1, cfg.num_col)
-    
+    else:
+        cfg.row_anchor = np.linspace(0.42, 1, cfg.num_row)
+        cfg.col_anchor = np.linspace(0, 1, cfg.num_col)
+
     return args, cfg
 
 
@@ -186,7 +189,11 @@ def real_init_weights(m):
             
 import importlib
 def get_model(cfg):
-    return importlib.import_module('model.model_'+cfg.dataset.lower()).get_model(cfg)
+    try:
+        module = importlib.import_module('model.model_' + cfg.dataset.lower())
+    except ModuleNotFoundError:
+        module = importlib.import_module('model.model_culane')
+    return module.get_model(cfg)
 
 def get_train_loader(cfg):
     if cfg.dataset == 'CULane':
