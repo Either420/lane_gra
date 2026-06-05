@@ -268,7 +268,9 @@ class TrainCollect:
         labels_col_float[labels_col_float<0] = -1
         labels_col_float[labels_col_float>1] = -1
 
-        return {'images':images, 'seg_images':seg_images, 'labels_row':labels_row, 'labels_col':labels_col, 'labels_row_float':labels_row_float, 'labels_col_float':labels_col_float}
+        return {'images':images, 'seg_images':seg_images, 'labels_row':labels_row, 'labels_col':labels_col,
+                'labels_row_float':labels_row_float, 'labels_col_float':labels_col_float,
+                'raw_points': points}  # [B, 4, 35, 2] for dynamic anchor re-interpolation
     
     def __len__(self):
         return int((self.eii_n + self.batch_size - 1) / self.batch_size)

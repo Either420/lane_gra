@@ -1,4 +1,4 @@
-from utils.loss import SoftmaxFocalLoss, ParsingRelationLoss, ParsingRelationDis, MeanLoss, TokenSegLoss, VarLoss, EMDLoss, RegLoss
+from utils.loss import SoftmaxFocalLoss, ParsingRelationLoss, ParsingRelationDis, MeanLoss, TokenSegLoss, VarLoss, EMDLoss, RegLoss, AnchorEntropyLoss
 from utils.metrics import MultiLabelAcc, AccTopk, Metric_mIoU, Mae
 from utils.dist_utils import DistSummaryWriter
 
@@ -40,10 +40,16 @@ def get_loss_dict(cfg):
             'name': ['cls_loss', 'relation_loss', 'relation_dis','cls_loss_col','cls_ext','cls_ext_col', 'mean_loss_row', 'mean_loss_col'],
             'op': [SoftmaxFocalLoss(2, ignore_lb=-1), ParsingRelationLoss(), ParsingRelationDis(), SoftmaxFocalLoss(2, ignore_lb=-1), torch.nn.CrossEntropyLoss(),  torch.nn.CrossEntropyLoss(), MeanLoss(), MeanLoss(),],
             'weight': [1.0, cfg.sim_loss_w, cfg.shp_loss_w, 1.0, 1.0, 1.0, cfg.mean_loss_w, cfg.mean_loss_w,],
-            'data_src': [('cls_out', 'cls_label'), ('cls_out',), ('cls_out',), ('cls_out_col', 'cls_label_col'), 
+            'data_src': [('cls_out', 'cls_label'), ('cls_out',), ('cls_out',), ('cls_out_col', 'cls_label_col'),
             ('cls_out_ext', 'cls_out_ext_label'), ('cls_out_col_ext', 'cls_out_col_ext_label') , ('cls_out', 'cls_label'),('cls_out_col', 'cls_label_col'),
             ],
         }
+        if getattr(cfg, 'dynamic_anchor', False):
+            anchor_entropy_w = getattr(cfg, 'anchor_entropy_w', 0.01)
+            loss_dict['name'].append('anchor_entropy')
+            loss_dict['op'].append(AnchorEntropyLoss())
+            loss_dict['weight'].append(anchor_entropy_w)
+            loss_dict['data_src'].append(('row_logits', 'col_logits'))
     else:
         raise NotImplementedError
 

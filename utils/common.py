@@ -220,14 +220,75 @@ def inference(net, data_label, dataset):
 
 def inference_culane_tusimple(net, data_label):
     pred = net(data_label['images'])
-    cls_out_ext_label = (data_label['labels_row'] != -1).long()
-    cls_out_col_ext_label = (data_label['labels_col'] != -1).long()
-    res_dict = {'cls_out': pred['loc_row'], 'cls_label': data_label['labels_row'], 'cls_out_col':pred['loc_col'],'cls_label_col':data_label['labels_col'],
-            'cls_out_ext':pred['exist_row'], 'cls_out_ext_label':cls_out_ext_label, 'cls_out_col_ext':pred['exist_col'],
-                'cls_out_col_ext_label':cls_out_col_ext_label, 'labels_row_float':data_label['labels_row_float'], 'labels_col_float':data_label['labels_col_float'] }
-    if 'seg_out' in pred.keys():
-        res_dict['seg_out'] = pred['seg_out']
+
+    if 'row_anchors' in pred:
+        # Dynamic anchor mode: recompute GT labels at predicted anchor positions
+        from model.anchor_predictor import interp_label_rows, interp_label_cols
+        from data.constant import culane_row_anchor, culane_col_anchor
+
+        raw_pts = data_label['raw_points']   # [B, 4, 35, 2]  (x_px, row_px)
+        B = raw_pts.shape[0]
+
+        # row_anchors are fractions in [0.42,1.0]; convert to pixel coords
+        # CULane image height = 590
+        img_h = 590
+        img_w = 1640
+        row_anchors_px = pred['row_anchors'] * img_h   # [B, num_row]
+        col_anchors_px = pred['col_anchors'] * img_w   # [B, num_col]
+
+        num_cell_row = pred['loc_row'].shape[1]   # num_grid_row
+        num_cell_col = pred['loc_col'].shape[1]
+
+        # Interpolate GT x at dynamic row positions → [B, num_lanes, num_row]
+        x_at_rows = interp_label_rows(raw_pts, row_anchors_px)   # [B, L, num_row]
+        labels_row = (x_at_rows / img_w * (num_cell_row - 1)).long()
+        labels_row[x_at_rows < 0]               = -1
+        labels_row[labels_row < 0]              = -1
+        labels_row[labels_row > num_cell_row-1] = -1
+        labels_row = labels_row.permute(0, 2, 1)   # [B, num_row, num_lanes]
+
+        labels_row_float = (x_at_rows / img_w).permute(0, 2, 1)
+        labels_row_float[labels_row_float < 0] = -1
+        labels_row_float[labels_row_float > 1] = -1
+
+        # Interpolate GT row at dynamic col positions → [B, num_lanes, num_col]
+        row_at_cols = interp_label_cols(raw_pts, col_anchors_px)
+        labels_col = (row_at_cols / img_h * (num_cell_col - 1)).long()
+        labels_col[row_at_cols < 0]              = -1
+        labels_col[labels_col < 0]               = -1
+        labels_col[labels_col > num_cell_col-1]  = -1
+        labels_col = labels_col.permute(0, 2, 1)  # [B, num_col, num_lanes]
+
+        labels_col_float = (row_at_cols / img_h).permute(0, 2, 1)
+        labels_col_float[labels_col_float < 0] = -1
+        labels_col_float[labels_col_float > 1] = -1
+    else:
+        labels_row       = data_label['labels_row']
+        labels_col       = data_label['labels_col']
+        labels_row_float = data_label['labels_row_float']
+        labels_col_float = data_label['labels_col_float']
+
+    cls_out_ext_label     = (labels_row != -1).long()
+    cls_out_col_ext_label = (labels_col != -1).long()
+
+    res_dict = {
+        'cls_out':             pred['loc_row'],
+        'cls_label':           labels_row,
+        'cls_out_col':         pred['loc_col'],
+        'cls_label_col':       labels_col,
+        'cls_out_ext':         pred['exist_row'],
+        'cls_out_ext_label':   cls_out_ext_label,
+        'cls_out_col_ext':     pred['exist_col'],
+        'cls_out_col_ext_label': cls_out_col_ext_label,
+        'labels_row_float':    labels_row_float,
+        'labels_col_float':    labels_col_float,
+    }
+    if 'seg_out' in pred:
+        res_dict['seg_out']   = pred['seg_out']
         res_dict['seg_label'] = data_label['seg_images']
+    if 'row_logits' in pred:
+        res_dict['row_logits'] = pred['row_logits']
+        res_dict['col_logits'] = pred['col_logits']
 
     return res_dict
 def inference_curvelanes(net, data_label):

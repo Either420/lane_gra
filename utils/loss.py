@@ -193,6 +193,33 @@ class TokenSegLoss(nn.Module):
     def forward(self, logits, labels):
         return self.criterion(F.interpolate(logits, size=(200, 400), mode='bilinear').sigmoid(), (self.max_pool(labels[:, 0:1, :, :]) != 0).float())
 
+class AnchorEntropyLoss(nn.Module):
+    """
+    Encourages the anchor predictor to produce non-uniform distributions.
+
+    Maximising entropy → uniform anchors (bad for curves).
+    Minimising entropy → all anchors at one spot (too concentrated).
+    We add a small negative-entropy penalty so the network learns
+    to concentrate anchors where the lane is complex, without
+    collapsing all anchors to a single location.
+
+    In practice the classification loss already drives concentration;
+    this loss prevents degenerate uniform solutions during early training.
+    Weight should be small (e.g. 0.01).
+    """
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, row_logits, col_logits):
+        # row_logits, col_logits: [B, N]  (raw, before softmax)
+        row_p = F.softmax(row_logits, dim=1).clamp(1e-6, 1.0)
+        col_p = F.softmax(col_logits, dim=1).clamp(1e-6, 1.0)
+        # entropy = -sum(p * log p);  we penalise HIGH entropy (uniform)
+        row_entropy = -(row_p * row_p.log()).sum(1).mean()
+        col_entropy = -(col_p * col_p.log()).sum(1).mean()
+        return row_entropy + col_entropy
+
+
 def test_cross_entropy():
     pred = torch.rand(10,200,33,66)
     target = torch.randint(200,(10,33,66))
